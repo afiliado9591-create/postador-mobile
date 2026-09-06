@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "522060122689",
+    "project_id": "postador-mobile",
+    "storage_bucket": "postador-mobile.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:522060122689:android:2fb3378f98f800ee0e94c0",
+        "android_client_info": {
+          "package_name": "com.postadormobile.app"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyBlv5YwfDPGR5BlDz8ipb9JW_1g2agPpMo"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}

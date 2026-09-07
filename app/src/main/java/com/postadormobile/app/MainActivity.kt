@@ -51,18 +51,13 @@ class MainActivity : AppCompatActivity() {
             startActivity(Intent(this, QueueActivity::class.java))
         }
 
-        FirebaseMessaging.getInstance().token.addOnCompleteListener { task ->
-            if (!task.isSuccessful) {
-                binding.tokenText.text = "Token indisponível"
-                return@addOnCompleteListener
-            }
-            deviceToken = task.result
-            binding.tokenText.text = "✓ Token configurado neste aparelho"
+        binding.refreshTokenButton.setOnClickListener {
+            regenerateToken()
         }
 
         binding.copyTokenButton.setOnClickListener {
             if (deviceToken.isBlank()) {
-                Toast.makeText(this, "Aguarde o token carregar.", Toast.LENGTH_SHORT).show()
+                Toast.makeText(this, "Gere o token primeiro.", Toast.LENGTH_SHORT).show()
                 return@setOnClickListener
             }
 
@@ -71,12 +66,53 @@ class MainActivity : AppCompatActivity() {
             Toast.makeText(this, "Token copiado.", Toast.LENGTH_SHORT).show()
         }
 
+        loadToken()
         renderHistory()
     }
 
     override fun onResume() {
         super.onResume()
         if (::binding.isInitialized) renderHistory()
+    }
+
+    private fun loadToken() {
+        deviceToken = ""
+        binding.tokenText.text = "Gerando token..."
+        binding.refreshTokenButton.isEnabled = false
+        binding.copyTokenButton.isEnabled = false
+
+        FirebaseMessaging.getInstance().token.addOnCompleteListener { task ->
+            binding.refreshTokenButton.isEnabled = true
+
+            if (!task.isSuccessful) {
+                val error = task.exception
+                val type = error?.javaClass?.simpleName ?: "erro desconhecido"
+                val message = error?.localizedMessage?.take(220) ?: "sem mensagem"
+                binding.tokenText.text = "Token indisponível\n$type: $message"
+                return@addOnCompleteListener
+            }
+
+            val token = task.result.orEmpty().trim()
+            if (token.isBlank()) {
+                binding.tokenText.text = "Token indisponível\nO Firebase retornou um token vazio."
+                return@addOnCompleteListener
+            }
+
+            deviceToken = token
+            binding.tokenText.text = "✓ Token configurado neste aparelho"
+            binding.copyTokenButton.isEnabled = true
+        }
+    }
+
+    private fun regenerateToken() {
+        deviceToken = ""
+        binding.tokenText.text = "Atualizando token..."
+        binding.refreshTokenButton.isEnabled = false
+        binding.copyTokenButton.isEnabled = false
+
+        FirebaseMessaging.getInstance().deleteToken().addOnCompleteListener {
+            loadToken()
+        }
     }
 
     private fun renderHistory() {

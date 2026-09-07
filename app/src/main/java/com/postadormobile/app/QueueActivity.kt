@@ -2,9 +2,13 @@ package com.postadormobile.app
 
 import android.app.DatePickerDialog
 import android.app.TimePickerDialog
+import android.content.ClipData
+import android.content.ClipboardManager
+import android.content.Context
 import android.content.Intent
 import android.graphics.Color
 import android.graphics.Typeface
+import android.net.Uri
 import android.os.Bundle
 import android.text.InputType
 import android.view.View
@@ -34,6 +38,10 @@ class QueueActivity : AppCompatActivity() {
     private lateinit var intervalInput: EditText
     private lateinit var queueContainer: LinearLayout
     private lateinit var emptyQueue: TextView
+    private lateinit var groupNameInput: EditText
+    private lateinit var groupUrlInput: EditText
+    private lateinit var groupsContainer: LinearLayout
+    private val selectedGroupIds = linkedSetOf<String>()
     private var scheduledAt: Long = System.currentTimeMillis() + 5 * 60 * 1000L
 
     private val destinations = listOf(
@@ -48,11 +56,13 @@ class QueueActivity : AppCompatActivity() {
         super.onCreate(savedInstanceState)
         title = "Fila automática"
         buildUi()
+        renderGroups()
         renderQueue()
     }
 
     override fun onResume() {
         super.onResume()
+        if (::groupsContainer.isInitialized) renderGroups()
         if (::queueContainer.isInitialized) renderQueue()
     }
 
@@ -72,7 +82,7 @@ class QueueActivity : AppCompatActivity() {
         })
 
         root.addView(TextView(this).apply {
-            text = "O app agenda as postagens, avisa no horário e deixa tudo pronto para você confirmar no Facebook, Instagram ou TikTok."
+            text = "Agende postagens e deixe o app preparar tudo. Para grupos, escolha os botões dos grupos cadastrados e confirme a publicação no Facebook."
             textSize = 14f
             setTextColor(Color.DKGRAY)
             setPadding(0, dp(6), 0, dp(16))
@@ -103,6 +113,37 @@ class QueueActivity : AppCompatActivity() {
         )
         root.addView(targetSpinner, fullWidth())
 
+        root.addView(sectionTitle("Meus grupos do Facebook"))
+        root.addView(TextView(this).apply {
+            text = "Cadastre os grupos uma vez. Depois toque nos botões para selecionar onde a campanha deve ir."
+            textSize = 13f
+            setTextColor(Color.DKGRAY)
+            setPadding(0, 0, 0, dp(8))
+        })
+
+        groupNameInput = EditText(this).apply {
+            hint = "Nome do grupo"
+            inputType = InputType.TYPE_CLASS_TEXT or InputType.TYPE_TEXT_FLAG_CAP_SENTENCES
+        }
+        root.addView(groupNameInput, fullWidth())
+
+        groupUrlInput = EditText(this).apply {
+            hint = "Link do grupo no Facebook"
+            inputType = InputType.TYPE_CLASS_TEXT or InputType.TYPE_TEXT_VARIATION_URI
+        }
+        root.addView(groupUrlInput, fullWidth(top = 8))
+
+        root.addView(Button(this).apply {
+            text = "+ Adicionar grupo"
+            setOnClickListener { addGroup() }
+        }, fullWidth(top = 8))
+
+        groupsContainer = LinearLayout(this).apply {
+            orientation = LinearLayout.VERTICAL
+            setPadding(0, dp(8), 0, dp(4))
+        }
+        root.addView(groupsContainer, fullWidth())
+
         dateButton = Button(this).apply {
             text = formatSchedule(scheduledAt)
             setOnClickListener { chooseDateTime() }
@@ -120,7 +161,7 @@ class QueueActivity : AppCompatActivity() {
                 marginEnd = dp(6)
             }
         }
-        countWrap.addView(label("Quantidade (1 a 20)"))
+        countWrap.addView(label("Repetições / quantidade (1 a 20)"))
         countInput = EditText(this).apply {
             setText("1")
             inputType = InputType.TYPE_CLASS_NUMBER
@@ -150,7 +191,7 @@ class QueueActivity : AppCompatActivity() {
         }, fullWidth(top = 12))
 
         root.addView(TextView(this).apply {
-            text = "Dica: para Facebook Feed e Grupos o app prepara tudo e você só confirma a publicação no Facebook."
+            text = "Facebook Página continua automático pela nuvem. Feed e Grupos são preparados pelo celular para sua confirmação final."
             textSize = 12f
             setTextColor(Color.DKGRAY)
             setPadding(0, dp(10), 0, dp(20))
@@ -168,6 +209,79 @@ class QueueActivity : AppCompatActivity() {
         root.addView(queueContainer, fullWidth())
     }
 
+    private fun addGroup() {
+        val name = groupNameInput.text.toString().trim()
+        val url = groupUrlInput.text.toString().trim()
+        if (name.isBlank()) {
+            Toast.makeText(this, "Digite o nome do grupo.", Toast.LENGTH_SHORT).show()
+            return
+        }
+        if (!url.startsWith("https://") && !url.startsWith("http://")) {
+            Toast.makeText(this, "Cole o link completo do grupo.", Toast.LENGTH_SHORT).show()
+            return
+        }
+        FacebookGroupStore.add(this, FacebookGroupStore.Group(name = name, url = url))
+        groupNameInput.text.clear()
+        groupUrlInput.text.clear()
+        renderGroups()
+        Toast.makeText(this, "Grupo adicionado.", Toast.LENGTH_SHORT).show()
+    }
+
+    private fun renderGroups() {
+        groupsContainer.removeAllViews()
+        val groups = FacebookGroupStore.list(this)
+        selectedGroupIds.retainAll(groups.map { it.id }.toSet())
+
+        if (groups.isEmpty()) {
+            groupsContainer.addView(TextView(this).apply {
+                text = "Nenhum grupo cadastrado ainda."
+                textSize = 13f
+                setTextColor(Color.DKGRAY)
+                setPadding(0, dp(6), 0, dp(6))
+            })
+            return
+        }
+
+        groups.forEach { group ->
+            val row = LinearLayout(this).apply {
+                orientation = LinearLayout.HORIZONTAL
+                setPadding(0, dp(3), 0, dp(3))
+            }
+
+            row.addView(Button(this).apply {
+                val selected = selectedGroupIds.contains(group.id)
+                text = if (selected) "✓ ${group.name}" else group.name
+                setOnClickListener {
+                    if (selectedGroupIds.contains(group.id)) selectedGroupIds.remove(group.id)
+                    else selectedGroupIds.add(group.id)
+                    renderGroups()
+                }
+            }, LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f).apply { marginEnd = dp(4) })
+
+            row.addView(Button(this).apply {
+                text = "Abrir"
+                setOnClickListener {
+                    try {
+                        startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(group.url)))
+                    } catch (_: Exception) {
+                        Toast.makeText(this@QueueActivity, "Não foi possível abrir o grupo.", Toast.LENGTH_SHORT).show()
+                    }
+                }
+            })
+
+            row.addView(Button(this).apply {
+                text = "X"
+                setOnClickListener {
+                    selectedGroupIds.remove(group.id)
+                    FacebookGroupStore.delete(this@QueueActivity, group.id)
+                    renderGroups()
+                }
+            })
+
+            groupsContainer.addView(row, fullWidth())
+        }
+    }
+
     private fun createCampaign() {
         val text = textInput.text.toString().trim()
         val media = mediaInput.text.toString().trim()
@@ -180,21 +294,51 @@ class QueueActivity : AppCompatActivity() {
         val interval = intervalInput.text.toString().toLongOrNull()?.coerceIn(15, 1440) ?: 60L
         val destination = destinations[targetSpinner.selectedItemPosition.coerceIn(destinations.indices)]
         val firstTime = scheduledAt.coerceAtLeast(System.currentTimeMillis() + 30_000L)
+        var created = 0
 
-        repeat(count) { index ->
-            val item = ScheduledPostStore.Item(
-                id = UUID.randomUUID().toString(),
-                text = text,
-                mediaUrl = media,
-                target = destination.target,
-                targetLabel = destination.label,
-                scheduledAt = firstTime + index * interval * 60_000L
-            )
-            ScheduledPostStore.add(this, item)
-            ScheduledPostWorker.schedule(this, item)
+        if (destination.target == "facebook_groups") {
+            val selectedGroups = FacebookGroupStore.list(this).filter { selectedGroupIds.contains(it.id) }
+            if (selectedGroups.isEmpty()) {
+                Toast.makeText(this, "Selecione pelo menos um botão de grupo.", Toast.LENGTH_LONG).show()
+                return
+            }
+
+            for (round in 0 until count) {
+                for (group in selectedGroups) {
+                    if (created >= 20) break
+                    val item = ScheduledPostStore.Item(
+                        id = UUID.randomUUID().toString(),
+                        text = text,
+                        mediaUrl = media,
+                        target = destination.target,
+                        targetLabel = "Facebook Grupos • ${group.name}",
+                        scheduledAt = firstTime + created * interval * 60_000L,
+                        groupName = group.name,
+                        groupUrl = group.url
+                    )
+                    ScheduledPostStore.add(this, item)
+                    ScheduledPostWorker.schedule(this, item)
+                    created++
+                }
+                if (created >= 20) break
+            }
+        } else {
+            repeat(count) { index ->
+                val item = ScheduledPostStore.Item(
+                    id = UUID.randomUUID().toString(),
+                    text = text,
+                    mediaUrl = media,
+                    target = destination.target,
+                    targetLabel = destination.label,
+                    scheduledAt = firstTime + index * interval * 60_000L
+                )
+                ScheduledPostStore.add(this, item)
+                ScheduledPostWorker.schedule(this, item)
+                created++
+            }
         }
 
-        Toast.makeText(this, "$count postagem(ns) adicionada(s) à fila.", Toast.LENGTH_LONG).show()
+        Toast.makeText(this, "$created postagem(ns) adicionada(s) à fila.", Toast.LENGTH_LONG).show()
         textInput.text.clear()
         mediaInput.text.clear()
         countInput.setText("1")
@@ -243,6 +387,14 @@ class QueueActivity : AppCompatActivity() {
             setTextColor(Color.DKGRAY)
             setPadding(0, dp(3), 0, dp(6))
         })
+        if (item.groupName.isNotBlank()) {
+            box.addView(TextView(this).apply {
+                text = "Grupo: ${item.groupName}"
+                textSize = 13f
+                setTypeface(typeface, Typeface.BOLD)
+                setPadding(0, 0, 0, dp(5))
+            })
+        }
         if (item.text.isNotBlank()) {
             box.addView(TextView(this).apply {
                 text = item.text.take(240)
@@ -257,13 +409,20 @@ class QueueActivity : AppCompatActivity() {
             })
         }
 
+        if (item.groupUrl.isNotBlank()) {
+            box.addView(Button(this).apply {
+                text = "Abrir grupo + copiar texto"
+                setOnClickListener { openSpecificGroup(item) }
+            }, fullWidth(top = 8))
+        }
+
         val actions = LinearLayout(this).apply {
             orientation = LinearLayout.HORIZONTAL
             setPadding(0, dp(8), 0, 0)
         }
 
         actions.addView(Button(this).apply {
-            text = "Abrir agora"
+            text = "Preparar"
             setOnClickListener { openNow(item) }
         }, LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f).apply { marginEnd = dp(4) })
 
@@ -297,6 +456,20 @@ class QueueActivity : AppCompatActivity() {
         }
     }
 
+    private fun openSpecificGroup(item: ScheduledPostStore.Item) {
+        val clipboard = getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
+        val copyText = listOf(item.text, item.mediaUrl)
+            .filter { it.isNotBlank() }
+            .joinToString("\n\n")
+        clipboard.setPrimaryClip(ClipData.newPlainText("Postagem", copyText))
+        Toast.makeText(this, "Texto copiado. Abrindo ${item.groupName}.", Toast.LENGTH_LONG).show()
+        try {
+            startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(item.groupUrl)))
+        } catch (_: Exception) {
+            Toast.makeText(this, "Não foi possível abrir o grupo.", Toast.LENGTH_SHORT).show()
+        }
+    }
+
     private fun openNow(item: ScheduledPostStore.Item) {
         ScheduledPostWorker.cancel(this, item.id)
         ScheduledPostStore.updateStatus(this, item.id, ScheduledPostStore.STATUS_OPENED)
@@ -309,7 +482,11 @@ class QueueActivity : AppCompatActivity() {
             mediaUrl = item.mediaUrl,
             target = item.target,
             status = HistoryStore.STATUS_RECEBIDA,
-            detail = "Aberta manualmente pela fila automática."
+            detail = if (item.groupName.isBlank()) {
+                "Aberta manualmente pela fila automática."
+            } else {
+                "Aberta para o grupo ${item.groupName}. No Facebook, confirme esse grupo antes de publicar."
+            }
         )
 
         startActivity(Intent(this, ShareActivity::class.java).apply {
@@ -317,6 +494,8 @@ class QueueActivity : AppCompatActivity() {
             putExtra("text", item.text)
             putExtra("mediaUrl", item.mediaUrl)
             putExtra("target", item.target)
+            putExtra("groupName", item.groupName)
+            putExtra("groupUrl", item.groupUrl)
             putExtra("scheduledQueueId", item.id)
         })
         renderQueue()
@@ -357,7 +536,7 @@ class QueueActivity : AppCompatActivity() {
         this.text = text
         textSize = 20f
         setTypeface(typeface, Typeface.BOLD)
-        setPadding(0, dp(6), 0, dp(8))
+        setPadding(0, dp(12), 0, dp(8))
     }
 
     private fun label(text: String) = TextView(this).apply {

@@ -26,6 +26,12 @@ jobs:
       - name: Configurar Android SDK
         uses: android-actions/setup-android@v3
 
+      - name: Restaurar assinatura debug estável
+        uses: actions/cache@v4
+        with:
+          path: ~/.android/debug.keystore
+          key: postador-mobile-debug-keystore-v1
+
       - name: Instalar Android API 36
         run: sdkmanager "platforms;android-36" "build-tools;36.0.0"
 

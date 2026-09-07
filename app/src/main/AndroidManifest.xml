@@ -17,6 +17,10 @@
         android:theme="@style/Theme.PostadorMobile">
 
         <activity
+            android:name=".QueueActivity"
+            android:exported="false" />
+
+        <activity
             android:name=".ShareActivity"
             android:exported="false" />
 

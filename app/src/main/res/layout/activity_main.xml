@@ -2,7 +2,8 @@
 <ScrollView xmlns:android="http://schemas.android.com/apk/res/android"
     android:layout_width="match_parent"
     android:layout_height="match_parent"
-    android:fillViewport="true">
+    android:fillViewport="true"
+    android:overScrollMode="always">
 
     <LinearLayout
         android:layout_width="match_parent"
@@ -20,14 +21,15 @@
         <TextView
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
-            android:layout_marginTop="6dp"
-            android:text="Receba, acompanhe e compartilhe suas postagens."
-            android:textSize="15sp" />
+            android:layout_marginTop="4dp"
+            android:text="Versão 0.2 • histórico ativado"
+            android:textSize="13sp"
+            android:textStyle="bold" />
 
         <TextView
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
-            android:layout_marginTop="24dp"
+            android:layout_marginTop="18dp"
             android:text="Minhas postagens"
             android:textSize="22sp"
             android:textStyle="bold" />
@@ -66,25 +68,15 @@
             android:textStyle="bold" />
 
         <TextView
-            android:layout_width="wrap_content"
-            android:layout_height="wrap_content"
-            android:layout_marginTop="5dp"
-            android:text="Token deste aparelho"
-            android:textSize="13sp" />
-
-        <TextView
             android:id="@+id/tokenText"
             android:layout_width="match_parent"
-            android:layout_height="52dp"
-            android:layout_marginTop="6dp"
+            android:layout_height="48dp"
+            android:layout_marginTop="8dp"
             android:background="#EEEEEE"
-            android:ellipsize="end"
             android:gravity="center_vertical"
-            android:maxLines="1"
             android:padding="12dp"
-            android:text="Carregando token..."
-            android:textIsSelectable="false"
-            android:textSize="13sp" />
+            android:text="Carregando configuração..."
+            android:textSize="14sp" />
 
         <Button
             android:id="@+id/copyTokenButton"
@@ -92,6 +84,10 @@
             android:layout_height="wrap_content"
             android:layout_marginTop="8dp"
             android:text="Copiar token" />
+
+        <Space
+            android:layout_width="match_parent"
+            android:layout_height="24dp" />
 
     </LinearLayout>
 </ScrollView>

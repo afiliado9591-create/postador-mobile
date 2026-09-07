@@ -57,7 +57,7 @@ class QueueActivity : AppCompatActivity() {
     }
 
     private fun buildUi() {
-        val scroll = ScrollView(this).apply { fillViewport = true }
+        val scroll = ScrollView(this).apply { isFillViewport = true }
         root = LinearLayout(this).apply {
             orientation = LinearLayout.VERTICAL
             setPadding(dp(18), dp(18), dp(18), dp(28))

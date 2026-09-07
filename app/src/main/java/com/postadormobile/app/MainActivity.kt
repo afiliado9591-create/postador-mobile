@@ -26,6 +26,7 @@ import java.util.Locale
 class MainActivity : AppCompatActivity() {
 
     private lateinit var binding: ActivityMainBinding
+    private var deviceToken: String = ""
 
     private val notificationPermissionLauncher =
         registerForActivityResult(ActivityResultContracts.RequestPermission()) { granted ->
@@ -47,18 +48,21 @@ class MainActivity : AppCompatActivity() {
 
         FirebaseMessaging.getInstance().token.addOnCompleteListener { task ->
             if (!task.isSuccessful) {
-                binding.tokenText.text = "Não foi possível obter o token."
+                binding.tokenText.text = "Token indisponível"
                 return@addOnCompleteListener
             }
-            binding.tokenText.text = task.result
+            deviceToken = task.result
+            binding.tokenText.text = "✓ Token configurado neste aparelho"
         }
 
         binding.copyTokenButton.setOnClickListener {
-            val token = binding.tokenText.text?.toString().orEmpty()
-            if (token.isBlank() || token.startsWith("Não foi")) return@setOnClickListener
+            if (deviceToken.isBlank()) {
+                Toast.makeText(this, "Aguarde o token carregar.", Toast.LENGTH_SHORT).show()
+                return@setOnClickListener
+            }
 
             val clipboard = getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
-            clipboard.setPrimaryClip(ClipData.newPlainText("FCM token", token))
+            clipboard.setPrimaryClip(ClipData.newPlainText("FCM token", deviceToken))
             Toast.makeText(this, "Token copiado.", Toast.LENGTH_SHORT).show()
         }
 
@@ -87,9 +91,7 @@ class MainActivity : AppCompatActivity() {
             layoutParams = LinearLayout.LayoutParams(
                 LinearLayout.LayoutParams.MATCH_PARENT,
                 LinearLayout.LayoutParams.WRAP_CONTENT
-            ).apply {
-                bottomMargin = dp(12)
-            }
+            ).apply { bottomMargin = dp(12) }
             background = historyBackground(item.status)
         }
 

@@ -20,12 +20,14 @@ class ShareActivity : AppCompatActivity() {
     private val executor = Executors.newSingleThreadExecutor()
     private val mainHandler = Handler(Looper.getMainLooper())
     private var postId: String = ""
+    private var scheduledQueueId: String = ""
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
 
         val prefs = getSharedPreferences("postador", MODE_PRIVATE)
         postId = intent.getStringExtra("postId") ?: prefs.getString("postId", "").orEmpty()
+        scheduledQueueId = intent.getStringExtra("scheduledQueueId").orEmpty()
         val text = intent.getStringExtra("text") ?: prefs.getString("text", "").orEmpty()
         val mediaUrl = intent.getStringExtra("mediaUrl") ?: prefs.getString("mediaUrl", "").orEmpty()
 
@@ -146,6 +148,9 @@ class ShareActivity : AppCompatActivity() {
 
             startActivity(chooser)
             HistoryStore.update(this, postId, HistoryStore.STATUS_ENVIADA, successDetail)
+            if (scheduledQueueId.isNotBlank()) {
+                ScheduledPostStore.updateStatus(this, scheduledQueueId, ScheduledPostStore.STATUS_OPENED)
+            }
 
             mainHandler.postDelayed({
                 if (!isFinishing && !isDestroyed) finish()

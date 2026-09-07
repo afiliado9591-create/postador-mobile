@@ -29,6 +29,12 @@ class ScheduledPostWorker(
 
         ScheduledPostStore.updateStatus(applicationContext, id, ScheduledPostStore.STATUS_READY)
 
+        val detail = if (item.groupName.isBlank()) {
+            "Fila automática: chegou o horário. Toque na notificação para abrir a postagem."
+        } else {
+            "Fila automática: chegou o horário do grupo ${item.groupName}. Toque para preparar a postagem."
+        }
+
         HistoryStore.add(
             applicationContext,
             id = "queue-${item.id}",
@@ -36,7 +42,7 @@ class ScheduledPostWorker(
             mediaUrl = item.mediaUrl,
             target = item.target,
             status = HistoryStore.STATUS_RECEBIDA,
-            detail = "Fila automática: chegou o horário. Toque na notificação para abrir a postagem."
+            detail = detail
         )
 
         showNotification(item)
@@ -65,6 +71,8 @@ class ScheduledPostWorker(
             putExtra("text", item.text)
             putExtra("mediaUrl", item.mediaUrl)
             putExtra("target", item.target)
+            putExtra("groupName", item.groupName)
+            putExtra("groupUrl", item.groupUrl)
             putExtra("scheduledQueueId", item.id)
         }
 
@@ -82,7 +90,11 @@ class ScheduledPostWorker(
             .setContentText(if (preview.isBlank()) "Toque para abrir a postagem." else preview)
             .setStyle(
                 NotificationCompat.BigTextStyle().bigText(
-                    if (preview.isBlank()) "Sua postagem agendada está pronta." else item.text.take(350)
+                    if (item.groupName.isBlank()) {
+                        if (preview.isBlank()) "Sua postagem agendada está pronta." else item.text.take(350)
+                    } else {
+                        "Grupo: ${item.groupName}\n\n${item.text.take(300)}"
+                    }
                 )
             )
             .setPriority(NotificationCompat.PRIORITY_HIGH)

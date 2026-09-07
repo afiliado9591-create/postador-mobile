@@ -18,6 +18,8 @@ object ScheduledPostStore {
         val target: String,
         val targetLabel: String,
         val scheduledAt: Long,
+        val groupName: String = "",
+        val groupUrl: String = "",
         val status: String = STATUS_PENDING,
         val createdAt: Long = System.currentTimeMillis()
     )
@@ -79,6 +81,8 @@ object ScheduledPostStore {
         put("target", item.target)
         put("targetLabel", item.targetLabel)
         put("scheduledAt", item.scheduledAt)
+        put("groupName", item.groupName)
+        put("groupUrl", item.groupUrl)
         put("status", item.status)
         put("createdAt", item.createdAt)
     }
@@ -90,6 +94,8 @@ object ScheduledPostStore {
         target = o.optString("target", "chooser"),
         targetLabel = o.optString("targetLabel", "Escolher aplicativo"),
         scheduledAt = o.optLong("scheduledAt", System.currentTimeMillis()),
+        groupName = o.optString("groupName", ""),
+        groupUrl = o.optString("groupUrl", ""),
         status = o.optString("status", STATUS_PENDING),
         createdAt = o.optLong("createdAt", System.currentTimeMillis())
     )

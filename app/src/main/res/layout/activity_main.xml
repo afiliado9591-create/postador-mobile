@@ -22,14 +22,28 @@
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
             android:layout_marginTop="4dp"
-            android:text="Versão 0.2 • histórico ativado"
+            android:text="Versão 0.3 • fila automática no celular"
             android:textSize="13sp"
             android:textStyle="bold" />
+
+        <Button
+            android:id="@+id/queueButton"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="16dp"
+            android:text="Fila automática no celular" />
+
+        <TextView
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="6dp"
+            android:text="Agende até 20 postagens. O app avisa no horário e abre o compartilhamento pronto para confirmação."
+            android:textSize="13sp" />
 
         <TextView
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
-            android:layout_marginTop="18dp"
+            android:layout_marginTop="22dp"
             android:text="Minhas postagens"
             android:textSize="22sp"
             android:textStyle="bold" />

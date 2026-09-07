@@ -1,5 +1,7 @@
 package com.postadormobile.app
 
+import android.content.ClipData
+import android.content.ClipboardManager
 import android.content.Context
 import android.content.Intent
 import android.net.Uri
@@ -31,7 +33,7 @@ class ShareActivity : AppCompatActivity() {
             return
         }
 
-        Toast.makeText(this, "Preparando mídia...", Toast.LENGTH_SHORT).show()
+        Toast.makeText(this, "Preparando postagem...", Toast.LENGTH_SHORT).show()
 
         executor.execute {
             try {
@@ -40,16 +42,13 @@ class ShareActivity : AppCompatActivity() {
                     share(text, result.first, result.second, target)
                     finish()
                 }
-            } catch (e: Exception) {
+            } catch (_: Exception) {
                 runOnUiThread {
+                    // URLs de páginas (TikTok, Shopee, sites etc.) não são mídia direta.
+                    // Nesse caso compartilhamos/copiamos texto + link em vez de baixar HTML.
                     val fallbackText = listOf(text, mediaUrl)
                         .filter { it.isNotBlank() }
                         .joinToString("\n\n")
-                    Toast.makeText(
-                        this,
-                        "Não consegui baixar a mídia. Vou compartilhar o link.",
-                        Toast.LENGTH_LONG
-                    ).show()
                     share(fallbackText, null, "text/plain", target)
                     finish()
                 }
@@ -64,6 +63,7 @@ class ShareActivity : AppCompatActivity() {
             readTimeout = 30000
             instanceFollowRedirects = true
             requestMethod = "GET"
+            setRequestProperty("User-Agent", "PostadorMobile/1.1")
         }
 
         connection.connect()
@@ -75,66 +75,102 @@ class ShareActivity : AppCompatActivity() {
         val serverMime = connection.contentType
             ?.substringBefore(";")
             ?.trim()
+            ?.lowercase()
             ?.takeIf { it.contains("/") }
 
-        val extensionFromMime = serverMime?.let {
-            MimeTypeMap.getSingleton().getExtensionFromMimeType(it)
+        // Só baixa quando for realmente imagem ou vídeo. HTML e outros links viram link normal.
+        if (serverMime == null || (!serverMime.startsWith("image/") && !serverMime.startsWith("video/"))) {
+            connection.disconnect()
+            throw IllegalStateException("URL não é mídia direta")
         }
 
-        val extensionFromUrl = MimeTypeMap.getFileExtensionFromUrl(urlString)
-            .takeIf { it.isNotBlank() }
-
-        val extension = extensionFromMime ?: extensionFromUrl ?: "bin"
-        val mime = serverMime ?: guessMime(extension)
+        val extensionFromMime = MimeTypeMap.getSingleton().getExtensionFromMimeType(serverMime)
+        val extensionFromUrl = MimeTypeMap.getFileExtensionFromUrl(urlString).takeIf { it.isNotBlank() }
+        val extension = extensionFromMime ?: extensionFromUrl ?: if (serverMime.startsWith("video/")) "mp4" else "jpg"
 
         val dir = File(cacheDir, "shared_media").apply { mkdirs() }
         val file = File(dir, "post_${System.currentTimeMillis()}.$extension")
 
         connection.inputStream.use { input ->
-            file.outputStream().use { output ->
-                input.copyTo(output)
-            }
+            file.outputStream().use { output -> input.copyTo(output) }
         }
         connection.disconnect()
 
-        val uri = FileProvider.getUriForFile(
-            this,
-            "${packageName}.fileprovider",
-            file
-        )
-
-        return uri to mime
-    }
-
-    private fun guessMime(extension: String): String {
-        return MimeTypeMap.getSingleton()
-            .getMimeTypeFromExtension(extension.lowercase())
-            ?: "application/octet-stream"
+        val uri = FileProvider.getUriForFile(this, "${packageName}.fileprovider", file)
+        return uri to serverMime
     }
 
     private fun share(text: String, media: Uri?, mime: String, target: String) {
+        if (target == "facebook") {
+            shareToFacebook(text, media, mime)
+            return
+        }
+
         val sendIntent = Intent(Intent.ACTION_SEND).apply {
             type = if (media != null) mime else "text/plain"
             putExtra(Intent.EXTRA_TEXT, text)
-
             if (media != null) {
                 putExtra(Intent.EXTRA_STREAM, media)
                 addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
             }
         }
 
-        val packageName = when (target) {
-            "facebook" -> "com.facebook.katana"
+        val targetPackage = when (target) {
             "instagram" -> "com.instagram.android"
             "tiktok" -> "com.zhiliaoapp.musically"
             else -> null
         }
 
-        if (packageName != null && isPackageInstalled(packageName)) {
-            sendIntent.setPackage(packageName)
+        if (targetPackage != null && isPackageInstalled(targetPackage)) {
+            sendIntent.setPackage(targetPackage)
             startActivity(sendIntent)
         } else {
             startActivity(Intent.createChooser(sendIntent, "Compartilhar postagem"))
+        }
+    }
+
+    private fun shareToFacebook(text: String, media: Uri?, mime: String) {
+        val facebookPackage = "com.facebook.katana"
+
+        // Facebook frequentemente ignora EXTRA_TEXT em compartilhamentos.
+        // Copiamos a legenda/link para que o usuário possa colar no compositor.
+        if (text.isNotBlank()) {
+            val clipboard = getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
+            clipboard.setPrimaryClip(ClipData.newPlainText("Postagem", text))
+        }
+
+        if (!isPackageInstalled(facebookPackage)) {
+            val generic = Intent(Intent.ACTION_SEND).apply {
+                type = if (media != null) mime else "text/plain"
+                putExtra(Intent.EXTRA_TEXT, text)
+                if (media != null) {
+                    putExtra(Intent.EXTRA_STREAM, media)
+                    addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+                }
+            }
+            startActivity(Intent.createChooser(generic, "Compartilhar postagem"))
+            return
+        }
+
+        if (media != null) {
+            val sendIntent = Intent(Intent.ACTION_SEND).apply {
+                type = mime
+                setPackage(facebookPackage)
+                putExtra(Intent.EXTRA_STREAM, media)
+                putExtra(Intent.EXTRA_TEXT, text)
+                addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+            }
+            Toast.makeText(this, "Mídia enviada. O texto também foi copiado para você colar no Facebook.", Toast.LENGTH_LONG).show()
+            startActivity(sendIntent)
+            return
+        }
+
+        // Para texto/link, abrir o Facebook é mais previsível que ACTION_SEND, que pode abrir vazio.
+        val launchIntent = packageManager.getLaunchIntentForPackage(facebookPackage)
+        if (launchIntent != null) {
+            launchIntent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+            Toast.makeText(this, "Texto e link copiados. No Facebook, toque e segure para colar.", Toast.LENGTH_LONG).show()
+            startActivity(launchIntent)
         }
     }
 

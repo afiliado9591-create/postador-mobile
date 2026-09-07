@@ -19,17 +19,24 @@ class ShareActivity : AppCompatActivity() {
 
     private val executor = Executors.newSingleThreadExecutor()
     private val mainHandler = Handler(Looper.getMainLooper())
+    private var postId: String = ""
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
 
         val prefs = getSharedPreferences("postador", MODE_PRIVATE)
-        val text = prefs.getString("text", "").orEmpty()
-        val mediaUrl = prefs.getString("mediaUrl", "").orEmpty()
+        postId = intent.getStringExtra("postId") ?: prefs.getString("postId", "").orEmpty()
+        val text = intent.getStringExtra("text") ?: prefs.getString("text", "").orEmpty()
+        val mediaUrl = intent.getStringExtra("mediaUrl") ?: prefs.getString("mediaUrl", "").orEmpty()
 
         if (mediaUrl.isBlank()) {
             mainHandler.postDelayed({
-                openShareSheetSafely(text, null, "text/plain")
+                openShareSheetSafely(
+                    text = text,
+                    media = null,
+                    mime = "text/plain",
+                    successDetail = "Compartilhamento aberto com sucesso. Confirme a publicação no aplicativo escolhido."
+                )
             }, 350)
             return
         }
@@ -40,14 +47,24 @@ class ShareActivity : AppCompatActivity() {
             try {
                 val result = downloadDirectMedia(mediaUrl)
                 runOnUiThread {
-                    openShareSheetSafely(text, result.first, result.second)
+                    openShareSheetSafely(
+                        text = text,
+                        media = result.first,
+                        mime = result.second,
+                        successDetail = "Imagem ou vídeo preparado e enviado para a tela de compartilhamento."
+                    )
                 }
             } catch (_: Exception) {
                 runOnUiThread {
                     val fallbackText = listOf(text, mediaUrl)
                         .filter { it.isNotBlank() }
                         .joinToString("\n\n")
-                    openShareSheetSafely(fallbackText, null, "text/plain")
+                    openShareSheetSafely(
+                        text = fallbackText,
+                        media = null,
+                        mime = "text/plain",
+                        successDetail = "O link não era uma mídia direta e foi enviado como texto/link."
+                    )
                 }
             }
         }
@@ -101,7 +118,12 @@ class ShareActivity : AppCompatActivity() {
         }
     }
 
-    private fun openShareSheetSafely(text: String, media: Uri?, mime: String) {
+    private fun openShareSheetSafely(
+        text: String,
+        media: Uri?,
+        mime: String,
+        successDetail: String
+    ) {
         try {
             val sendIntent = Intent(Intent.ACTION_SEND).apply {
                 type = if (media != null) mime else "text/plain"
@@ -123,15 +145,21 @@ class ShareActivity : AppCompatActivity() {
             }
 
             startActivity(chooser)
+            HistoryStore.update(this, postId, HistoryStore.STATUS_ENVIADA, successDetail)
 
-            // Não encerra imediatamente: alguns Androids/MIUI fecham o chooser se a Activity morre na mesma hora.
             mainHandler.postDelayed({
                 if (!isFinishing && !isDestroyed) finish()
             }, 1500)
-        } catch (e: Exception) {
+        } catch (_: Exception) {
+            HistoryStore.update(
+                this,
+                postId,
+                HistoryStore.STATUS_FALHOU,
+                "Não foi possível abrir a tela de compartilhamento no Android."
+            )
             Toast.makeText(
                 this,
-                "Não consegui abrir o compartilhamento. Tente novamente.",
+                "Falhou ao abrir o compartilhamento. Veja em Minhas postagens.",
                 Toast.LENGTH_LONG
             ).show()
             mainHandler.postDelayed({ finish() }, 1800)

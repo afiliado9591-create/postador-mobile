@@ -22,7 +22,7 @@
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
             android:layout_marginTop="4dp"
-            android:text="Versão 0.4 • fila automática + diagnóstico de token"
+            android:text="Versão 0.5 • fila + botões de grupos"
             android:textSize="13sp"
             android:textStyle="bold" />
 
@@ -37,7 +37,7 @@
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
             android:layout_marginTop="6dp"
-            android:text="Agende até 20 postagens. O app avisa no horário e abre o compartilhamento pronto para confirmação."
+            android:text="Agende até 20 postagens. Para grupos, cadastre os links e escolha pelos botões."
             android:textSize="13sp" />
 
         <TextView

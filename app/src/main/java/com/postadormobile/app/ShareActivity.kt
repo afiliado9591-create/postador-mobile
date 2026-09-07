@@ -1,8 +1,11 @@
 package com.postadormobile.app
 
+import android.content.ClipData
 import android.content.Intent
 import android.net.Uri
 import android.os.Bundle
+import android.os.Handler
+import android.os.Looper
 import android.webkit.MimeTypeMap
 import android.widget.Toast
 import androidx.appcompat.app.AppCompatActivity
@@ -15,6 +18,7 @@ import java.util.concurrent.Executors
 class ShareActivity : AppCompatActivity() {
 
     private val executor = Executors.newSingleThreadExecutor()
+    private val mainHandler = Handler(Looper.getMainLooper())
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -24,8 +28,9 @@ class ShareActivity : AppCompatActivity() {
         val mediaUrl = prefs.getString("mediaUrl", "").orEmpty()
 
         if (mediaUrl.isBlank()) {
-            openShareSheet(text, null, "text/plain")
-            finish()
+            mainHandler.postDelayed({
+                openShareSheetSafely(text, null, "text/plain")
+            }, 350)
             return
         }
 
@@ -35,16 +40,14 @@ class ShareActivity : AppCompatActivity() {
             try {
                 val result = downloadDirectMedia(mediaUrl)
                 runOnUiThread {
-                    openShareSheet(text, result.first, result.second)
-                    finish()
+                    openShareSheetSafely(text, result.first, result.second)
                 }
             } catch (_: Exception) {
                 runOnUiThread {
                     val fallbackText = listOf(text, mediaUrl)
                         .filter { it.isNotBlank() }
                         .joinToString("\n\n")
-                    openShareSheet(fallbackText, null, "text/plain")
-                    finish()
+                    openShareSheetSafely(fallbackText, null, "text/plain")
                 }
             }
         }
@@ -59,61 +62,85 @@ class ShareActivity : AppCompatActivity() {
             setRequestProperty("User-Agent", "Mozilla/5.0 Android PostadorMobile")
         }
 
-        connection.connect()
+        try {
+            connection.connect()
 
-        if (connection.responseCode !in 200..299) {
-            throw IllegalStateException("HTTP ${connection.responseCode}")
-        }
+            if (connection.responseCode !in 200..299) {
+                throw IllegalStateException("HTTP ${connection.responseCode}")
+            }
 
-        val mime = connection.contentType
-            ?.substringBefore(";")
-            ?.trim()
-            ?.lowercase()
-            ?: throw IllegalStateException("Sem content-type")
+            val mime = connection.contentType
+                ?.substringBefore(";")
+                ?.trim()
+                ?.lowercase()
+                ?: throw IllegalStateException("Sem content-type")
 
-        if (!mime.startsWith("image/") && !mime.startsWith("video/")) {
+            if (!mime.startsWith("image/") && !mime.startsWith("video/")) {
+                throw IllegalStateException("Não é mídia direta")
+            }
+
+            val extByMime = MimeTypeMap.getSingleton().getExtensionFromMimeType(mime)
+            val extByUrl = MimeTypeMap.getFileExtensionFromUrl(urlString).takeIf { it.isNotBlank() }
+            val extension = extByMime ?: extByUrl ?: if (mime.startsWith("video/")) "mp4" else "jpg"
+
+            val dir = File(cacheDir, "shared_media").apply { mkdirs() }
+            val file = File(dir, "post_${System.currentTimeMillis()}.$extension")
+
+            connection.inputStream.use { input ->
+                file.outputStream().use { output -> input.copyTo(output) }
+            }
+
+            val uri = FileProvider.getUriForFile(
+                this,
+                "${packageName}.fileprovider",
+                file
+            )
+            return uri to mime
+        } finally {
             connection.disconnect()
-            throw IllegalStateException("Não é mídia direta")
         }
-
-        val extByMime = MimeTypeMap.getSingleton().getExtensionFromMimeType(mime)
-        val extByUrl = MimeTypeMap.getFileExtensionFromUrl(urlString).takeIf { it.isNotBlank() }
-        val extension = extByMime ?: extByUrl ?: if (mime.startsWith("video/")) "mp4" else "jpg"
-
-        val dir = File(cacheDir, "shared_media").apply { mkdirs() }
-        val file = File(dir, "post_${System.currentTimeMillis()}.$extension")
-
-        connection.inputStream.use { input ->
-            file.outputStream().use { output -> input.copyTo(output) }
-        }
-        connection.disconnect()
-
-        val uri = FileProvider.getUriForFile(
-            this,
-            "${packageName}.fileprovider",
-            file
-        )
-        return uri to mime
     }
 
-    private fun openShareSheet(text: String, media: Uri?, mime: String) {
-        val sendIntent = Intent(Intent.ACTION_SEND).apply {
-            type = if (media != null) mime else "text/plain"
-            if (text.isNotBlank()) putExtra(Intent.EXTRA_TEXT, text)
-            if (media != null) {
-                putExtra(Intent.EXTRA_STREAM, media)
-                addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
-                clipData = android.content.ClipData.newUri(contentResolver, "media", media)
-            }
-        }
+    private fun openShareSheetSafely(text: String, media: Uri?, mime: String) {
+        try {
+            val sendIntent = Intent(Intent.ACTION_SEND).apply {
+                type = if (media != null) mime else "text/plain"
 
-        val chooser = Intent.createChooser(sendIntent, "Compartilhar postagem")
-        chooser.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
-        startActivity(chooser)
+                if (text.isNotBlank()) {
+                    putExtra(Intent.EXTRA_TEXT, text)
+                }
+
+                if (media != null) {
+                    putExtra(Intent.EXTRA_STREAM, media)
+                    clipData = ClipData.newUri(contentResolver, "postador_media", media)
+                    addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+                }
+            }
+
+            val chooser = Intent.createChooser(sendIntent, "Compartilhar postagem")
+            if (media != null) {
+                chooser.addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+            }
+
+            startActivity(chooser)
+
+            // Não encerra imediatamente: alguns Androids/MIUI fecham o chooser se a Activity morre na mesma hora.
+            mainHandler.postDelayed({
+                if (!isFinishing && !isDestroyed) finish()
+            }, 1500)
+        } catch (e: Exception) {
+            Toast.makeText(
+                this,
+                "Não consegui abrir o compartilhamento. Tente novamente.",
+                Toast.LENGTH_LONG
+            ).show()
+            mainHandler.postDelayed({ finish() }, 1800)
+        }
     }
 
     override fun onDestroy() {
-        executor.shutdownNow()
+        mainHandler.removeCallbacksAndMessages(null)
+        executor.shutdown()
         super.onDestroy()
     }
 }

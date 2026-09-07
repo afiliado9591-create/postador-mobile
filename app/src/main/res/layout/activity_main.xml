@@ -22,7 +22,7 @@
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
             android:layout_marginTop="4dp"
-            android:text="Versão 0.3 • fila automática no celular"
+            android:text="Versão 0.4 • fila automática + diagnóstico de token"
             android:textSize="13sp"
             android:textStyle="bold" />
 
@@ -84,13 +84,21 @@
         <TextView
             android:id="@+id/tokenText"
             android:layout_width="match_parent"
-            android:layout_height="48dp"
+            android:layout_height="wrap_content"
+            android:minHeight="48dp"
             android:layout_marginTop="8dp"
             android:background="#EEEEEE"
             android:gravity="center_vertical"
             android:padding="12dp"
             android:text="Carregando configuração..."
             android:textSize="14sp" />
+
+        <Button
+            android:id="@+id/refreshTokenButton"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="8dp"
+            android:text="Gerar / atualizar token" />
 
         <Button
             android:id="@+id/copyTokenButton"
